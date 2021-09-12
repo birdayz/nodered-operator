@@ -1,0 +1,7 @@
+apiVersion: nodered.nerden.de.github.com/v1
+kind: Nodered
+metadata:
+  name: sample
+spec:
+  # Add fields here
+  version: bar

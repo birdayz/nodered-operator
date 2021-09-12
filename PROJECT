@@ -1,0 +1,16 @@
+domain: github.com
+layout:
+- go.kubebuilder.io/v3
+projectName: nodered-operator
+repo: github.com/birdayz/nodered-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: github.com
+  group: nodered.nerden.de
+  kind: Nodered
+  path: github.com/birdayz/nodered-operator/api/v1
+  version: v1
+version: "3"
