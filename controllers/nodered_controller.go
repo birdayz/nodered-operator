@@ -21,8 +21,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	noderednerdendev1 "github.com/birdayz/nodered-operator/api/v1"
@@ -53,13 +55,28 @@ type NoderedReconciler struct {
 func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 
+	instance := &noderednerdendev1.Nodered{}
+	err := r.Get(ctx, req.NamespacedName, instance)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Object not found, return.  Created objects are automatically garbage collected.
+			// For additional cleanup logic use finalizers.
+			return ctrl.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return ctrl.Result{}, err
+	}
+
 	l.Info("Test", "name", req.NamespacedName)
 
-	resourceName := req.NamespacedName.Name + "-nodered"
+	name := types.NamespacedName{
+		Name:      req.Name + "-nodered",
+		Namespace: req.Namespace,
+	}
 
 	sts := appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      resourceName,
+			Name:      name.Name,
 			Namespace: req.Namespace,
 		},
 		Spec: appsv1.StatefulSetSpec{
@@ -88,14 +105,19 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			},
 		},
 	}
+	if err := controllerutil.SetControllerReference(instance, &sts, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
 
-	if err := r.Get(ctx, req.NamespacedName, &sts); err != nil {
+	if err := r.Get(ctx, name, &sts); err != nil {
 		if errors.IsNotFound(err) {
+			l.Info("Not found!")
 			err = r.Create(ctx, &sts)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 			l.Info("Created StatefulSet", "name", req.Name, "namespace", req.Namespace)
+
 		} else {
 			return ctrl.Result{}, err
 		}
