@@ -7,6 +7,42 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - apps
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - services/status
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets/status
+  verbs:
+  - get
+- apiGroups:
   - nodered.nerden.de.github.com
   resources:
   - nodereds

@@ -42,6 +42,10 @@ type NoderedReconciler struct {
 //+kubebuilder:rbac:groups=nodered.nerden.de.github.com,resources=nodereds,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodered.nerden.de.github.com,resources=nodereds/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodered.nerden.de.github.com,resources=nodereds/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get
+//+kubebuilder:rbac:groups=apps,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=apps,resources=services/status,verbs=get
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -55,6 +59,8 @@ type NoderedReconciler struct {
 func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 
+	l.Info("Reconcile")
+
 	instance := &noderednerdendev1.Nodered{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
@@ -67,59 +73,87 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	l.Info("Test", "name", req.NamespacedName)
-
 	name := types.NamespacedName{
 		Name:      req.Name + "-nodered",
 		Namespace: req.Namespace,
 	}
 
-	sts := appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name.Name,
-			Namespace: req.Namespace,
-		},
-		Spec: appsv1.StatefulSetSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"nodered.nerden.de/instance": req.Name},
+	// Create sts
+	{
+		sts := appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name.Name,
+				Namespace: req.Namespace,
 			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"nodered.nerden.de/instance": req.Name},
+			Spec: appsv1.StatefulSetSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"nodered.nerden.de/instance": req.Name},
 				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:            "nodered",
-							Image:           "nodered/node-red",
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							// Env: []corev1.EnvVar{
-							// 	{
-							// 		Name:  "APISERVER_URL",
-							// 		Value: "https://" + instance.Spec.Apiserver.Restful.Host,
-							// 	},
-							// },
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{"nodered.nerden.de/instance": req.Name},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:            "nodered",
+								Image:           "nodered/node-red",
+								ImagePullPolicy: corev1.PullIfNotPresent,
+							},
 						},
 					},
 				},
 			},
-		},
-	}
-	if err := controllerutil.SetControllerReference(instance, &sts, r.Scheme); err != nil {
-		return ctrl.Result{}, err
-	}
+		}
+		if err := controllerutil.SetControllerReference(instance, &sts, r.Scheme); err != nil {
+			return ctrl.Result{}, err
+		}
 
-	if err := r.Get(ctx, name, &sts); err != nil {
-		if errors.IsNotFound(err) {
-			l.Info("Not found!")
-			err = r.Create(ctx, &sts)
-			if err != nil {
+		if err := r.Get(ctx, name, &sts); err != nil {
+			if errors.IsNotFound(err) {
+				l.Info("Not found!")
+				err = r.Create(ctx, &sts)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				l.Info("Created StatefulSet", "name", req.Name, "namespace", req.Namespace)
+
+			} else {
 				return ctrl.Result{}, err
 			}
-			l.Info("Created StatefulSet", "name", req.Name, "namespace", req.Namespace)
+		}
+	}
 
-		} else {
+	// Create service
+	{
+		service := corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name.Name,
+				Namespace: req.Namespace,
+			},
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{
+					{
+						Name: "http",
+						Port: 1880,
+					},
+				},
+				Selector: map[string]string{"nodered.nerden.de/instance": req.Name},
+			},
+		}
+		if err := controllerutil.SetControllerReference(instance, &service, r.Scheme); err != nil {
 			return ctrl.Result{}, err
+		}
+
+		if err := r.Get(ctx, name, &service); err != nil {
+			if errors.IsNotFound(err) {
+				err = r.Create(ctx, &service)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+			} else {
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
@@ -132,5 +166,7 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *NoderedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&noderednerdendev1.Nodered{}).
+		Owns(&appsv1.StatefulSet{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
