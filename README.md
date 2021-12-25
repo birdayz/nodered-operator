@@ -7,3 +7,4 @@
 - sidecars
 - specific loggig config/support ?
 - context store config
+- credential store secret
