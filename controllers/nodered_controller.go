@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"text/template"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -85,6 +86,8 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		Namespace: req.Namespace,
 	}
 
+	var configmapDirty bool
+
 	// Settings
 	{
 		configMapName := types.NamespacedName{
@@ -101,7 +104,7 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		var b bytes.Buffer
 
-		if err := tpl.Execute(&b, map[string]string{"Title": "my-title"}); err != nil {
+		if err := tpl.Execute(&b, instance.Spec); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -145,6 +148,8 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+
+			configmapDirty = true
 		}
 	}
 
@@ -153,13 +158,19 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		replicas := int32(1)
 
+		image := "nodered/node-red:latest"
+		if instance.Spec.Image != "" {
+			image = instance.Spec.Image
+		}
+
 		modified := appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name.Name,
 				Namespace: req.Namespace,
 			},
 			Spec: appsv1.StatefulSetSpec{
-				Replicas: &replicas,
+				PodManagementPolicy: appsv1.ParallelPodManagement, // must not be OrderedReady because of https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#forced-rollback
+				Replicas:            &replicas,
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"nodered.nerden.de/instance": req.Name},
 				},
@@ -196,7 +207,7 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						Containers: []corev1.Container{
 							{
 								Name:            "nodered",
-								Image:           "nodered/node-red",
+								Image:           image,
 								ImagePullPolicy: corev1.PullIfNotPresent,
 								Command: []string{"node-red",
 									"-s", "/tmp/settings.js",
@@ -238,6 +249,13 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			} else {
 				return ctrl.Result{}, err
 			}
+		}
+
+		if configmapDirty {
+			if modified.Spec.Template.ObjectMeta.Annotations == nil {
+				modified.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+			}
+			modified.Spec.Template.ObjectMeta.Annotations["kubectl.kubernetes.io/restartedA"] = time.Now().Format(time.RFC3339)
 		}
 
 		patchResult, err := patch.DefaultPatchMaker.Calculate(&currentSts, &modified, compareOpts...)
@@ -319,7 +337,7 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 const settingsTemplate = `module.exports = {
     editorTheme: {
         page: {
-            title: "{{ .Title }}"
+            title: "{{ .Settings.EditorTheme.Page.Title }}"
 				}
 		}
 }`

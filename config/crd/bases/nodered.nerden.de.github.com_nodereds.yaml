@@ -36,10 +36,21 @@ spec:
           spec:
             description: NoderedSpec defines the desired state of Nodered
             properties:
-              version:
+              image:
                 description: Foo is an example field of Nodered. Edit nodered_types.go
                   to remove/update
                 type: string
+              settings:
+                properties:
+                  editorTheme:
+                    properties:
+                      page:
+                        properties:
+                          title:
+                            type: string
+                        type: object
+                    type: object
+                type: object
             type: object
           status:
             description: NoderedStatus defines the observed state of Nodered

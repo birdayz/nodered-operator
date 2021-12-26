@@ -4,4 +4,7 @@ metadata:
   name: sample
 spec:
   # Add fields here
-  version: bar
+  settings:
+    editorTheme:
+      page:
+        title: "huhu"

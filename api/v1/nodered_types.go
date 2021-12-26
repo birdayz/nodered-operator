@@ -29,7 +29,20 @@ type NoderedSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Nodered. Edit nodered_types.go to remove/update
-	Version string `json:"version,omitempty"`
+	Image    string          `json:"image,omitempty"`
+	Settings NoderedSettings `json:"settings,omitempty"`
+}
+
+type NoderedSettings struct {
+	EditorTheme NoderedSettingsEditorTheme `json:"editorTheme,omitempty"`
+}
+
+type NoderedSettingsEditorTheme struct {
+	Page NoderedSettingsEditorThemePage `json:"page,omitempty"`
+}
+
+type NoderedSettingsEditorThemePage struct {
+	Title string `json:"title,omitempty"`
 }
 
 // NoderedStatus defines the observed state of Nodered
