@@ -334,14 +334,6 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{}, nil
 }
 
-const settingsTemplate = `module.exports = {
-    editorTheme: {
-        page: {
-            title: "{{ .Settings.EditorTheme.Page.Title }}"
-				}
-		}
-}`
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *NoderedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
