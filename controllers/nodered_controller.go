@@ -157,7 +157,7 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 		}
 
-		if current.ObjectMeta.Annotations != nil && current.ObjectMeta.Annotations["nerden.de/data-sha256-sum"] != b64Hash {
+		if current.ObjectMeta.Annotations == nil || current.ObjectMeta.Annotations["nerden.de/data-sha256-sum"] != b64Hash {
 
 			l.Info("Need to update cm", "currentSHA256", current.Annotations["nerden.de/data-sha256-sum"], "modifiedSHA256", modified.Annotations["nerden.de/data-sha256-sum"])
 			modified.ResourceVersion = current.ResourceVersion
