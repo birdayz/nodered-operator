@@ -167,8 +167,6 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 
 			configmapDirty = true
-		} else {
-			l.Info("Equal CM")
 		}
 	}
 
