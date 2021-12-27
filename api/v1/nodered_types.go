@@ -28,9 +28,20 @@ type NoderedSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Nodered. Edit nodered_types.go to remove/update
-	Image    string          `json:"image,omitempty"`
-	Settings NoderedSettings `json:"settings,omitempty"`
+	Image     string           `json:"image,omitempty"`
+	Settings  NoderedSettings  `json:"settings,omitempty"`
+	AdminAuth NoderedAdminAuth `json:"adminAuth,omitempty"`
+}
+
+type NoderedAdminAuth struct {
+	Type  string        `json:"type,omitempty"`
+	Users []NoderedUser `json:"users,omitempty"`
+}
+
+type NoderedUser struct {
+	Username    string `json:"username,omitempty"`
+	Password    string `json:"password,omitempty"`
+	Permissions string `json:"permissions,omitempty"`
 }
 
 type NoderedSettings struct {

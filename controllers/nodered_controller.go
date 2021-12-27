@@ -19,9 +19,12 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"text/template"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -104,14 +107,39 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		var b bytes.Buffer
 
+		// Exec template with plain password - it can be used to build a hash which
+		// allows comparing the desired and reported state without storing the
+		// password.
+		if err := tpl.Execute(&b, instance.Spec); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// Hash It
+		sha := sha256.New()
+		sha.Write(b.Bytes())
+		hash := sha.Sum(nil)
+		b64Hash := base64.URLEncoding.EncodeToString(hash)
+
+		// Now, replace plain passwords with their hashes and Exec tpl again
+		for i, _ := range instance.Spec.AdminAuth.Users {
+			hashed, err := bcrypt.GenerateFromPassword([]byte(instance.Spec.AdminAuth.Users[i].Password), 8)
+			if err != nil {
+				panic(err) // TODO
+			}
+			instance.Spec.AdminAuth.Users[i].Password = string(hashed)
+		}
+
+		// Exec tpl again
+		b.Reset()
 		if err := tpl.Execute(&b, instance.Spec); err != nil {
 			return ctrl.Result{}, err
 		}
 
 		modified := corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      name.Name + "-settings",
-				Namespace: req.Namespace,
+				Name:        name.Name + "-settings",
+				Namespace:   req.Namespace,
+				Annotations: map[string]string{"nerden.de/data-sha256-sum": b64Hash},
 			},
 			Data: map[string]string{
 				"settings.js": b.String(),
@@ -120,10 +148,6 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		if err := r.Get(ctx, configMapName, &current); err != nil {
 			if errors.IsNotFound(err) {
-				if err := patch.DefaultAnnotator.SetLastAppliedAnnotation(&modified); err != nil {
-					return ctrl.Result{}, err
-				}
-
 				err = r.Create(ctx, &modified)
 				if err != nil {
 					return ctrl.Result{}, err
@@ -133,16 +157,9 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 		}
 
-		patchResult, err := patch.DefaultPatchMaker.Calculate(&current, &modified, compareOpts...)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
+		if current.ObjectMeta.Annotations != nil && current.ObjectMeta.Annotations["nerden.de/data-sha256-sum"] != b64Hash {
 
-		if !patchResult.IsEmpty() {
-			if err := patch.DefaultAnnotator.SetLastAppliedAnnotation(&modified); err != nil {
-				return ctrl.Result{}, err
-			}
-
+			l.Info("Need to update cm", "currentSHA256", current.Annotations["nerden.de/data-sha256-sum"], "modifiedSHA256", modified.Annotations["nerden.de/data-sha256-sum"])
 			modified.ResourceVersion = current.ResourceVersion
 			err := r.Update(ctx, &modified)
 			if err != nil {
@@ -150,6 +167,8 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 
 			configmapDirty = true
+		} else {
+			l.Info("Equal CM")
 		}
 	}
 

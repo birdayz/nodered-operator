@@ -3,8 +3,13 @@ kind: Nodered
 metadata:
   name: sample
 spec:
-  # Add fields here
+  adminAuth:
+    type: credentials
+    users:
+    - password: def
+      permissions: '*'
+      username: admin
   settings:
     editorTheme:
       page:
-        title: "huhu"
+        title: hihi

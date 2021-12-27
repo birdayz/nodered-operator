@@ -36,9 +36,23 @@ spec:
           spec:
             description: NoderedSpec defines the desired state of Nodered
             properties:
+              adminAuth:
+                properties:
+                  type:
+                    type: string
+                  users:
+                    items:
+                      properties:
+                        password:
+                          type: string
+                        permissions:
+                          type: string
+                        username:
+                          type: string
+                      type: object
+                    type: array
+                type: object
               image:
-                description: Foo is an example field of Nodered. Edit nodered_types.go
-                  to remove/update
                 type: string
               settings:
                 properties:
