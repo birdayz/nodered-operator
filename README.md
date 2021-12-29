@@ -15,3 +15,28 @@ This is currently work in progress, and yet in a brainstorming phase where i'm d
 
 ## TODO
 - Technical admin user for Operator to talk to node-red api
+
+
+## Development
+
+Generate stuff:
+```
+make
+make generate
+make manifests
+```
+
+Run locally (some things may not work, as the operator tries to communicate with Node-RED instances via in-cluster networking):
+```
+make run
+```
+
+Build+Push img:
+```
+make docker-build docker-push IMG=ghcr.io/birdayz/nodered-operator:latest
+```
+
+Deploy:
+```
+kubectl apply -k config/default
+```
