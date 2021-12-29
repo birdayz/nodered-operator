@@ -1,0 +1,8 @@
+apiVersion: nodered.nerden.de.github.com/v1
+kind: Module
+metadata:
+  name: my-module
+spec:
+  packageName: node-red-node-suncalc
+  selector:
+    keya: vala

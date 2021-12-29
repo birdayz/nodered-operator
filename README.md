@@ -10,3 +10,8 @@ This is currently work in progress, and yet in a brainstorming phase where i'm d
 - specific loggig config/support ?
 - context store config
 - credential store secret
+- secrets, user ref/ secrets via...? direct vault, msft vault, .. ?
+- module/package CRD
+
+## TODO
+- Technical admin user for Operator

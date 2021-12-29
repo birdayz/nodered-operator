@@ -13,4 +13,13 @@ resources:
   kind: Nodered
   path: github.com/birdayz/nodered-operator/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: github.com
+  group: nodered.nerden.de
+  kind: Module
+  path: github.com/birdayz/nodered-operator/api/v1
+  version: v1
 version: "3"

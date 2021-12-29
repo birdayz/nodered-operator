@@ -9,24 +9,6 @@ rules:
 - apiGroups:
   - apps
   resources:
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - services/status
-  verbs:
-  - get
-- apiGroups:
-  - apps
-  resources:
   - statefulsets
   verbs:
   - create
@@ -42,6 +24,50 @@ rules:
   - statefulsets/status
   verbs:
   - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+- apiGroups:
+  - nodered.nerden.de.github.com
+  resources:
+  - modules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - nodered.nerden.de.github.com
+  resources:
+  - modules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - nodered.nerden.de.github.com
+  resources:
+  - modules/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - nodered.nerden.de.github.com
   resources:

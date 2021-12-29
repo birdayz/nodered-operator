@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/banzaicloud/k8s-objectmatcher v1.7.0
+	github.com/davecgh/go-spew v1.1.1
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
