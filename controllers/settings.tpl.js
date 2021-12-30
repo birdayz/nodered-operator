@@ -7,7 +7,7 @@ module.exports = {
         "username" : "{{ .Username }}",
         "password" : "{{ .Password }}",
         "permissions" : "{{ .Permissions }}"
-      }
+      },
       {{end}} 
     ]
   },

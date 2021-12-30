@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"text/template"
 	"time"
 
@@ -36,6 +37,7 @@ import (
 
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	noderednerdendev1 "github.com/birdayz/nodered-operator/api/v1"
+	"github.com/sethvargo/go-password/password"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,6 +58,8 @@ type NoderedReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=services/status,verbs=get
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps/status,verbs=get
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=secrets/status,verbs=get
 //+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims/status,verbs=get
 
@@ -91,6 +95,66 @@ func (r *NoderedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	name := types.NamespacedName{
 		Name:      req.Name + "-nodered",
 		Namespace: req.Namespace,
+	}
+
+	// Secret
+
+	// Generate secret. The secret is truth for us, so we'll use it to set the
+	// operator-account's password in the node-red resource.
+
+	var operatorSecret corev1.Secret
+	{
+		secretName := types.NamespacedName{
+			Name:      req.Name + "-nodered" + "-operator",
+			Namespace: req.Namespace,
+		}
+
+		if err := r.Get(ctx, secretName, &operatorSecret); err != nil {
+			if errors.IsNotFound(err) {
+
+				//if it does not exist, generate a password and create it
+				password, err := password.Generate(32, 10, 10, false, false)
+				if err != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to generate random password: %w", err)
+				}
+
+				operatorSecret = corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      secretName.Name,
+						Namespace: req.Namespace,
+					},
+					StringData: map[string]string{
+						"username": "nodered-operator",
+						"password": string(password),
+					},
+				}
+
+				if err := controllerutil.SetControllerReference(instance, &operatorSecret, r.Scheme); err != nil {
+					return ctrl.Result{}, err
+				}
+
+				err = r.Create(ctx, &operatorSecret)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+
+				l.Info("Created secret!")
+
+			} else {
+				return ctrl.Result{}, err
+			}
+		}
+
+		l.Info("Found Secret", "password", string(operatorSecret.Data["password"]))
+
+		// It exists - OK. The configmap for node-red will be updated in a later
+		// step, so we do nothing now
+		instance.Spec.AdminAuth.Users = append(instance.Spec.AdminAuth.Users, noderednerdendev1.NoderedUser{
+			Username:    string(operatorSecret.Data["username"]),
+			Password:    string(operatorSecret.Data["password"]),
+			Permissions: "*",
+		})
+
 	}
 
 	var configmapDirty bool

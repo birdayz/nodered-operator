@@ -17,20 +17,19 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	noderednerdendev1 "github.com/birdayz/nodered-operator/api/v1"
-	"github.com/davecgh/go-spew/spew"
+	"github.com/birdayz/nodered-operator/pkg/nodered"
 )
 
 // ModuleReconciler reconciles a Module object
@@ -42,6 +41,8 @@ type ModuleReconciler struct {
 //+kubebuilder:rbac:groups=nodered.nerden.de.github.com,resources=modules,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodered.nerden.de.github.com,resources=modules/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodered.nerden.de.github.com,resources=modules/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=secrets/status,verbs=get
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -72,19 +73,38 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	l.Info("Found", "items", len(nodeRedList.Items))
 
 	for _, item := range nodeRedList.Items {
-		l.Info("Item", "Namespace", item.Namespace, "Name", item.Name)
+		l.Info("Fetch secret for", "instance", item.Name)
 
-		var body bytes.Buffer
+		var secret corev1.Secret
+		secretName := types.NamespacedName{
+			Name:      item.Name + "-nodered" + "-operator",
+			Namespace: req.Namespace,
+		}
 
-		l.Info("xx")
+		err := r.Get(ctx, secretName, &secret)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return ctrl.Result{}, fmt.Errorf("could not find operator secret for instance: %w", err)
+			} else {
+				return ctrl.Result{}, err
+			}
+		}
 
-		// Check via HTTP API if the desired module is installed
-		resp, err := http.Post(fmt.Sprintf("http://%s.%s.svc.cluster.local:1880/nodes/%s", item.Name+"-nodered", req.Namespace, instance.Spec.PackageName), "application/json", &body)
-		fmt.Println(err)
-		res, _ := ioutil.ReadAll(resp.Body)
-		spew.Dump(string(res))
+		username := string(secret.Data["username"])
+		password := string(secret.Data["password"])
+		l.Info("Got secret", "username", username, "password", password)
 
-		l.Info("Res", "def", string(res))
+		// Fetch access token
+		accessToken, err := nodered.GetAccessToken(item.Name, item.Namespace, username, password)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to get access token: %w", err)
+		}
+		l.Info("AccessToken found", "access token", accessToken) // FIXME: remove this log
+
+		err = nodered.CreateModule(item.Name, item.Namespace, instance.Spec.PackageName, accessToken)
+		l.Info("CreateModule", "err", err)
+
+		// TODO: annotate module resource with ID
 
 	}
 
