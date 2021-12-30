@@ -33,6 +33,8 @@ import (
 
 	noderednerdendev1 "github.com/birdayz/nodered-operator/api/v1"
 	"github.com/birdayz/nodered-operator/controllers"
+	uberzap "go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -57,8 +59,14 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
+	encoderCfg := uberzap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "timestamp"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
 	opts := zap.Options{
-		Development: true,
+		Development: false,
+		Encoder:     zapcore.NewJSONEncoder(encoderCfg),
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
