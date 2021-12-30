@@ -11,7 +11,21 @@ import (
 	"strings"
 )
 
-func GetAccessToken(instance, namespace, username, password string) (string, error) {
+type Client struct {
+	httpClient *http.Client
+	username   string
+	password   string
+}
+
+func NewClient(username, password string) *Client {
+	return &Client{
+		httpClient: &http.Client{},
+		username:   username,
+		password:   password,
+	}
+}
+
+func (*Client) getAccessToken(instance, namespace, username, password string) (string, error) {
 	params := url.Values{}
 	params.Add("client_id", `node-red-admin`)
 	params.Add("grant_type", `password`)
@@ -28,7 +42,7 @@ func GetAccessToken(instance, namespace, username, password string) (string, err
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		// handle err
+		return "", err
 	}
 	defer resp.Body.Close()
 
@@ -50,46 +64,83 @@ func GetAccessToken(instance, namespace, username, password string) (string, err
 	return respData.AccessToken, nil
 }
 
-func CreateModule(instance, namespace, packageName, accessToken string) error {
+type CreateModuleResponse struct {
+	Name string `json:"name,omitempty"`
+}
+
+type ErrorResponse struct {
+	Code    ErrorCode `json:"code"`
+	Message string    `json:"message"`
+}
+
+type ErrorCode string
+
+var (
+	ErrorCodeUnexpectedError     ErrorCode = "unexpected_error"
+	ErrorCodeInvalidRequest      ErrorCode = "invalid_request"
+	ErrorCodeSettingsUnavailable ErrorCode = "settings_unavailable"
+	ErrorCodeModuleAlreadyLoaded ErrorCode = "module_already_loaded"
+	ErrorCodeTypeInUse           ErrorCode = "type_in_use"
+	ErrorCodeInvalidAPIVersion   ErrorCode = "invalid_api_version"
+)
+
+type NodeRedError struct {
+	StatusCode int
+	Code       ErrorCode
+	Message    string
+}
+
+func (e *NodeRedError) Error() string {
+	return fmt.Sprintf("http status: %d, code: %s, message: %s", e.StatusCode, e.Code, e.Message)
+}
+
+func (c *Client) CreateModule(instance, namespace, packageName string) (*CreateModuleResponse, error) {
+	token, err := c.getAccessToken(instance, namespace, c.username, c.password)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get access token: %w", err)
+	}
+
 	type Req struct {
 		Module string `json:"module"`
 	}
 
 	reqData, err := json.Marshal(&Req{Module: packageName})
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	fmt.Println("r", string(reqData))
 
 	// Check via HTTP API if the desired module is installed
 	request, err := http.NewRequest("POST", fmt.Sprintf("http://%s.%s.svc.cluster.local:1881/nodes", instance+"-nodered", namespace), bytes.NewReader(reqData))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	request.Header.Add("Authorization", "Bearer "+accessToken)
+	request.Header.Add("Authorization", "Bearer "+token)
 	request.Header.Add("Content-type", "application/json")
 	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	res, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	type respData struct {
-		Name string `json:"name,omitempty"`
+	var errorResp ErrorResponse
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		if unmarshalErr := json.Unmarshal(res, &errorResp); unmarshalErr != nil {
+			return nil, fmt.Errorf("request failed, status code: %s", resp.Status)
+		}
+
+		return nil, &NodeRedError{StatusCode: resp.StatusCode, Code: errorResp.Code, Message: errorResp.Message}
 	}
 
-	var respParsed respData
+	fmt.Printf("res: %v\n", string(res))
+
+	var respParsed CreateModuleResponse
 	if err := json.Unmarshal(res, &respParsed); err != nil {
-		return err
+		return nil, err
 	}
 
-	fmt.Println(string(res))
-	fmt.Println(respParsed.Name)
-
-	return nil
+	return &respParsed, nil
 }

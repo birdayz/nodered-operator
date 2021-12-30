@@ -94,17 +94,19 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		password := string(secret.Data["password"])
 		l.Info("Got secret", "username", username, "password", password)
 
-		// Fetch access token
-		accessToken, err := nodered.GetAccessToken(item.Name, item.Namespace, username, password)
+		client := nodered.NewClient(username, password)
+
+		resp, err := client.CreateModule(item.Name, item.Namespace, instance.Spec.PackageName)
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to get access token: %w", err)
+			if err, ok := err.(*nodered.NodeRedError); ok {
+				if err.Code == nodered.ErrorCodeModuleAlreadyLoaded {
+					l.Info("Module already loaded, doing nothing")
+				}
+			} else {
+				return ctrl.Result{}, err
+			}
 		}
-		l.Info("AccessToken found", "access token", accessToken) // FIXME: remove this log
-
-		err = nodered.CreateModule(item.Name, item.Namespace, instance.Spec.PackageName, accessToken)
-		l.Info("CreateModule", "err", err)
-
-		// TODO: annotate module resource with ID
+		l.Info("CreateModule", "resp", resp)
 
 	}
 

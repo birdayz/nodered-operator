@@ -65,8 +65,9 @@ func main() {
 	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 
 	opts := zap.Options{
-		Development: false,
-		Encoder:     zapcore.NewJSONEncoder(encoderCfg),
+		Development:     false,
+		Encoder:         zapcore.NewConsoleEncoder(encoderCfg),
+		StacktraceLevel: zapcore.PanicLevel,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

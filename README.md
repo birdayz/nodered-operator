@@ -14,7 +14,8 @@ This is currently work in progress, and yet in a brainstorming phase where i'm d
 - module/package CRD
 
 ## TODO
-- Technical admin user for Operator to talk to node-red api
+- [x] Technical admin user for Operator to talk to node-red api
+- delete modules if module CR is removed. finalizer?
 
 
 ## Development
