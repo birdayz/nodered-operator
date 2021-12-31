@@ -98,8 +98,8 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 		resp, err := client.CreateModule(item.Name, item.Namespace, instance.Spec.PackageName)
 		if err != nil {
-			if err, ok := err.(*nodered.NodeRedError); ok {
-				if err.Code == nodered.ErrorCodeModuleAlreadyLoaded {
+			if nrError, ok := err.(*nodered.NodeRedError); ok {
+				if nrError.Code == nodered.ErrorCodeModuleAlreadyLoaded {
 					l.Info("Module already loaded, doing nothing")
 				}
 			} else {

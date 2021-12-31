@@ -97,7 +97,7 @@ func (e *NodeRedError) Error() string {
 func (c *Client) CreateModule(instance, namespace, packageName string) (*CreateModuleResponse, error) {
 	token, err := c.getAccessToken(instance, namespace, c.username, c.password)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get access token: %w", err)
+		return nil, fmt.Errorf("failed to get access token: %w", err)
 	}
 
 	type Req struct {
@@ -112,17 +112,20 @@ func (c *Client) CreateModule(instance, namespace, packageName string) (*CreateM
 	// Check via HTTP API if the desired module is installed
 	request, err := http.NewRequest("POST", fmt.Sprintf("http://%s.%s.svc.cluster.local:1881/nodes", instance+"-nodered", namespace), bytes.NewReader(reqData))
 	if err != nil {
+		fmt.Println("FAIL")
 		return nil, err
 	}
 	request.Header.Add("Authorization", "Bearer "+token)
 	request.Header.Add("Content-type", "application/json")
 	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
+		fmt.Println("DO")
 		return nil, err
 	}
 
 	res, err := io.ReadAll(resp.Body)
 	if err != nil {
+		fmt.Println("read")
 		return nil, err
 	}
 
@@ -132,6 +135,7 @@ func (c *Client) CreateModule(instance, namespace, packageName string) (*CreateM
 			return nil, fmt.Errorf("request failed, status code: %s", resp.Status)
 		}
 
+		fmt.Println("NRE")
 		return nil, &NodeRedError{StatusCode: resp.StatusCode, Code: errorResp.Code, Message: errorResp.Message}
 	}
 
