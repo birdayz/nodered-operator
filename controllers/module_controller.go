@@ -94,9 +94,9 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		password := string(secret.Data["password"])
 		l.Info("Got secret", "username", username, "password", password)
 
-		client := nodered.NewClient(username, password)
+		client := nodered.NewClient(fmt.Sprintf("%s-nodered.%s.svc.cluster.local", item.Name, item.Namespace), 1881, username, password)
 
-		resp, err := client.CreateModule(item.Name, item.Namespace, instance.Spec.PackageName)
+		_, err = client.CreateModule(instance.Spec.PackageName)
 		if err != nil {
 			if nrError, ok := err.(*nodered.NodeRedError); ok {
 				if nrError.Code == nodered.ErrorCodeModuleAlreadyLoaded {
@@ -106,7 +106,6 @@ func (r *ModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				return ctrl.Result{}, err
 			}
 		}
-		l.Info("CreateModule", "resp", resp)
 
 	}
 

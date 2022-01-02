@@ -9,32 +9,47 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
+// Client is NOT thread-safe
 type Client struct {
 	httpClient *http.Client
+	host       string
+	port       int
 	username   string
 	password   string
+
+	token          string
+	tokenExpiresAt time.Time
 }
 
-func NewClient(username, password string) *Client {
+func NewClient(host string, port int, username, password string) *Client {
 	return &Client{
 		httpClient: &http.Client{},
+		host:       host,
+		port:       port,
 		username:   username,
 		password:   password,
 	}
 }
 
-func (*Client) getAccessToken(instance, namespace, username, password string) (string, error) {
+func (c *Client) getAccessToken() (string, error) {
+	if time.Now().Before(c.tokenExpiresAt) {
+		return c.token, nil
+	}
+
 	params := url.Values{}
 	params.Add("client_id", `node-red-admin`)
 	params.Add("grant_type", `password`)
 	params.Add("scope", `*`)
-	params.Add("username", `nodered-operator`)
-	params.Add("password", password)
+	params.Add("username", c.username)
+	params.Add("password", c.password)
 	body := strings.NewReader(params.Encode())
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("http://%s.%s.svc.cluster.local:1881/auth/token", instance+"-nodered", namespace), body)
+	tBefore := time.Now()
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("http://%s:%d/auth/token", c.host, c.port), body)
 	if err != nil {
 		return "", err
 	}
@@ -47,7 +62,8 @@ func (*Client) getAccessToken(instance, namespace, username, password string) (s
 	defer resp.Body.Close()
 
 	type tokenResp struct {
-		AccessToken string `json:"access_token,omitempty"`
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
 	}
 
 	respBodyData, err := ioutil.ReadAll(resp.Body)
@@ -60,6 +76,10 @@ func (*Client) getAccessToken(instance, namespace, username, password string) (s
 	if err != nil {
 		return "", err
 	}
+
+	c.token = respData.AccessToken
+	c.tokenExpiresAt = tBefore.Add(time.Second * time.Duration(respData.ExpiresIn))
+	fmt.Println("Stored token")
 
 	return respData.AccessToken, nil
 }
@@ -94,8 +114,12 @@ func (e *NodeRedError) Error() string {
 	return fmt.Sprintf("http status: %d, code: %s, message: %s", e.StatusCode, e.Code, e.Message)
 }
 
-func (c *Client) CreateModule(instance, namespace, packageName string) (*CreateModuleResponse, error) {
-	token, err := c.getAccessToken(instance, namespace, c.username, c.password)
+func (c *Client) GetModule() {
+	// TODO
+}
+
+func (c *Client) CreateModule(packageName string) (*CreateModuleResponse, error) {
+	token, err := c.getAccessToken()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get access token: %w", err)
 	}
@@ -110,22 +134,19 @@ func (c *Client) CreateModule(instance, namespace, packageName string) (*CreateM
 	}
 
 	// Check via HTTP API if the desired module is installed
-	request, err := http.NewRequest("POST", fmt.Sprintf("http://%s.%s.svc.cluster.local:1881/nodes", instance+"-nodered", namespace), bytes.NewReader(reqData))
+	request, err := http.NewRequest("POST", fmt.Sprintf("http://%s:%d/nodes", c.host, c.port), bytes.NewReader(reqData))
 	if err != nil {
-		fmt.Println("FAIL")
 		return nil, err
 	}
 	request.Header.Add("Authorization", "Bearer "+token)
 	request.Header.Add("Content-type", "application/json")
 	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
-		fmt.Println("DO")
 		return nil, err
 	}
 
 	res, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("read")
 		return nil, err
 	}
 
@@ -134,12 +155,8 @@ func (c *Client) CreateModule(instance, namespace, packageName string) (*CreateM
 		if unmarshalErr := json.Unmarshal(res, &errorResp); unmarshalErr != nil {
 			return nil, fmt.Errorf("request failed, status code: %s", resp.Status)
 		}
-
-		fmt.Println("NRE")
 		return nil, &NodeRedError{StatusCode: resp.StatusCode, Code: errorResp.Code, Message: errorResp.Message}
 	}
-
-	fmt.Printf("res: %v\n", string(res))
 
 	var respParsed CreateModuleResponse
 	if err := json.Unmarshal(res, &respParsed); err != nil {
